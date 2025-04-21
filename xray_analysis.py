@@ -28,16 +28,24 @@ import argparse
 import matplotlib.patches as patches
 
 # Arguments --------------------
-parser = argparse.ArgumentParser(description='X-ray analysis script')
-parser.add_argument('-scurve', help='SCurve file name without .root extension', required=True)
-parser.add_argument('-noise', help='Noise Scan file name without .root extension', required=True) 
-parser.add_argument('-outpath', help='Output path for results', default='results_xray_ToT')
-parser.add_argument('-sensor', help='Sensor name ID', required=True)
-parser.add_argument('-thr_missing', help='Threshold for missing pixel identification', type=int, default=200)
-parser.add_argument('-bias', help='Bias voltage', type=float, default=80)
-parser.add_argument('-vref', help='Vref in mV', type=float, default=600)
-parser.add_argument('-ntrg', help='Number of triggers', type=int, default=100)
-parser.add_argument('-nbx', help='Number of BX', type=int, default=16)
+parser = argparse.ArgumentParser(description='Do the XRay analysis')
+
+# Removed the -thr_strange argument as it's no longer used
+# parser.add_argument('-thr_strange','--thr_strange', help = 'The threshold to classify the problematic bumps [Hits]', default = 1000, type = int)
+
+parser.add_argument('-scurve','--scurve', help = 'The name of the SCurve.root (and txt) file', default = 'Run000021', type = str)
+parser.add_argument('-noise','--noise', help = 'The name of the Noise.root file', default = 'Run000088', type = str)
+parser.add_argument('-outpath','--outpath', help = 'The name of the folder to be created in results', default = 'results_xray_ToT', type = str)
+
+# Removed the -chips argument as chips are now defined within the script
+# parser.add_argument('-chips', '--chips', nargs='+', help='List of chip IDs to process', required=True) 
+
+parser.add_argument('-sensor','--sensor', help = 'The name of the sensor', default = 'SH0054', type = str) #write the module name. 
+parser.add_argument('-thr_missing','--thr_missing', help = 'The threshold to classify the missing bumps [Hits]', default = 200, type = int)
+parser.add_argument('-bias','--bias', help = 'The bias of the sensor [V]', default = 80, type = float)  # Changed type to float
+parser.add_argument('-vref','--vref', help = 'The VRef_ADC [mV]', default = 800, type = int)
+parser.add_argument('-ntrg','--ntrg', help = 'The total # of triggers in the xml', default = 1e7, type = int)
+parser.add_argument('-nbx','--nbx', help = 'The total # of bunch crossing for each trigger in the xml', default = 10, type = int)
 args = parser.parse_args()
 
 debug = False
@@ -57,7 +65,7 @@ Path = args.outpath
 # Thresholds and other parameters
 Thr = args.thr_missing
 Voltage_1 = args.bias
-Vref = args.vref
+V_adc = args.vref
 nTrg = args.ntrg
 nBX = args.nbx
 
@@ -65,7 +73,7 @@ nBX = args.nbx
 num_rows = 336
 num_cols = 432
 FIT = True
-el_conv = Vref / 162
+el_conv = V_adc / 162
 Noise_MAX = 65 * el_conv
 Thr_MAX = 600 * el_conv 
 step_noise = 0.1 * el_conv
@@ -367,78 +375,59 @@ def HitsVsToTPlot(Data, ToTMapX, Mask_before, output_path):
     valid_indices = np.where(Mask_flat == 1)
     Data_valid = Data_flat[valid_indices]
     ToT_valid = ToT_flat[valid_indices]
-    
-    # Ensure we have valid data to plot
-    if len(Data_valid) == 0 or len(ToT_valid) == 0:
-        print("Warning: No valid data for HitsVsToTPlot. Skipping plot.")
-        return
-    
-    # Define bins - ensure they are monotonically increasing
-    # For hits, create bins from 0 to max value
-    max_hits = max(Data_valid.max(), 500)  # At least 500 for scale
-    
-    # Create bins that are guaranteed to be monotonically increasing
-    hits_bins = np.linspace(0, max_hits, 150)  # 150 bins from 0 to max_hits
-    
-    # For ToT, simple linear bins
-    min_tot = ToT_valid.min()
-    max_tot = ToT_valid.max()
-    if min_tot == max_tot:  # Handle edge case of all equal values
-        min_tot = min_tot - 0.5
-        max_tot = max_tot + 0.5
-    
-    ToT_bins = np.linspace(min_tot, max_tot, 50)
-    
-    try:
-        # Regular 2D Histogram
-        fig = plt.figure(figsize=(10, 7))
-        ax = fig.add_subplot(111)
-        h = ax.hist2d(ToT_valid, Data_valid, bins=[ToT_bins, hits_bins],
-                    norm=matplotlib.colors.LogNorm(), cmap='viridis')
-        ax.set_xlabel('ToT')
-        ax.set_ylabel('Number of Hits')
-        ax.set_title('Number of Hits vs ToT for Pixels (Regular)')
 
-        # ToT=1 and Hits=200 with labels
-        ax.axvline(x=1, color='red', linestyle='--', linewidth=1, label='ToT = 1')
-        ax.axhline(y=200, color='blue', linestyle='--', linewidth=1, label='Hits = 200')
+    # Define bins
+    hits_bins_lower = np.linspace(0, 500, 100)  # 100 bins from 0 to 500
+    hits_bins_upper = np.linspace(500, Data_valid.max(), 50)  # 50 bins from 500 to max hits
+    hits_bins = np.concatenate((hits_bins_lower, hits_bins_upper[1:]))  # Avoid duplicate bin at 500
 
-        plt.colorbar(h[3], ax=ax, label='Number of Pixels')
-        plt.grid(True)
-        ax.legend(loc='upper right')
-        plt.tight_layout()
-        fig.savefig(os.path.join(output_path, f"{Voltage_1}V_Hits_vs_ToT_2Dhist_regular.png"), format='png', dpi=300)
-        if debug:
-            print(f"Saved plot: {os.path.join(output_path, f'{Voltage_1}V_Hits_vs_ToT_2Dhist_regular.png')}")
-        plt.close(fig)  # Close the figure
+    ToT_bins = np.linspace(ToT_valid.min(), ToT_valid.max(), 50)
 
-        # Zoomed 2D Histogram with y-axis limited to 500 hits
-        fig = plt.figure(figsize=(10, 7))
-        ax = fig.add_subplot(111)
+    # Regular 2D Histogram
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111)
+    h = ax.hist2d(ToT_valid, Data_valid, bins=[ToT_bins, hits_bins],
+                 norm=matplotlib.colors.LogNorm(), cmap='viridis')
+    ax.set_xlabel('ToT')
+    ax.set_ylabel('Number of Hits')
+    ax.set_title('Number of Hits vs ToT for Pixels (Regular)')
 
-        h_zoom = ax.hist2d(ToT_valid, Data_valid, bins=[ToT_bins, hits_bins],
-                        norm=matplotlib.colors.LogNorm(), cmap='viridis')
-        ax.set_ylim([0, 500])
+    # ToT=1 and Hits=200 with labels
+    ax.axvline(x=1, color='red', linestyle='--', linewidth=1, label='ToT = 1')
+    ax.axhline(y=200, color='blue', linestyle='--', linewidth=1, label='Hits = 200')
 
-        ax.set_xlabel('ToT')
-        ax.set_ylabel('Number of Hits')
-        ax.set_title('Number of Hits vs ToT for Pixels (Hits up to 500)')
+    plt.colorbar(h[3], ax=ax, label='Number of Pixels')
+    plt.grid(True)
+    ax.legend(loc='upper right')
+    plt.tight_layout()
+    fig.savefig(os.path.join(output_path, f"{Voltage_1}V_Hits_vs_ToT_2Dhist_regular.png"), format='png', dpi=300)
+    if debug:
+        print(f"Saved plot: {os.path.join(output_path, f'{Voltage_1}V_Hits_vs_ToT_2Dhist_regular.png')}")
+    plt.close(fig)  # Close the figure
 
-        ax.axvline(x=1, color='red', linestyle='--', linewidth=1, label='ToT = 1')
-        ax.axhline(y=200, color='blue', linestyle='--', linewidth=1, label='Hits = 200')
+    # Zoomed 2D Histogram with y-axis limited to 500 hits
+    fig = plt.figure(figsize=(10, 7))
+    ax = fig.add_subplot(111)
 
-        plt.colorbar(h_zoom[3], ax=ax, label='Number of Pixels')
-        plt.grid(True)
-        ax.legend(loc='upper right')
-        plt.tight_layout()
-        fig.savefig(os.path.join(output_path, f"{Voltage_1}V_Hits_vs_ToT_2Dhist_hits_500.png"), format='png', dpi=300)
-        if debug:
-            print(f"Saved plot: {os.path.join(output_path, f'{Voltage_1}V_Hits_vs_ToT_2Dhist_hits_500.png')}")
-        plt.close(fig)  # Close the figure
-        
-    except Exception as e:
-        print(f"Error generating HitsVsToTPlot: {e}")
-        # Continue with the analysis even if plotting fails
+    h_zoom = ax.hist2d(ToT_valid, Data_valid, bins=[ToT_bins, hits_bins],
+                       norm=matplotlib.colors.LogNorm(), cmap='viridis')
+    ax.set_ylim([0, 500])
+
+    ax.set_xlabel('ToT')
+    ax.set_ylabel('Number of Hits')
+    ax.set_title('Number of Hits vs ToT for Pixels (Hits up to 500)')
+
+    ax.axvline(x=1, color='red', linestyle='--', linewidth=1, label='ToT = 1')
+    ax.axhline(y=200, color='blue', linestyle='--', linewidth=1, label='Hits = 200')
+
+    plt.colorbar(h_zoom[3], ax=ax, label='Number of Pixels')
+    plt.grid(True)
+    ax.legend(loc='upper right')
+    plt.tight_layout()
+    fig.savefig(os.path.join(output_path, f"{Voltage_1}V_Hits_vs_ToT_2Dhist_hits_500.png"), format='png', dpi=300)
+    if debug:
+        print(f"Saved plot: {os.path.join(output_path, f'{Voltage_1}V_Hits_vs_ToT_2Dhist_hits_500.png')}")
+    plt.close(fig)  # Close the figure
 
 # Plotting Function
 def Plots(ToTMap, NoiseMap, Noise_L, ThrMap, Thr_L, Data, Data_L, Missing_mat, Missing, Perc_missing, Disabled, ToTMapX, FitErrors, Mask_before, Sensor, output_path):
@@ -737,7 +726,6 @@ def list_enabled_pixels_below_threshold(ToTMap, Mask_before, threshold=0):
         pixel_list.append((row, col))
 
     return pixel_list
-
 
 # Terminal Information Printing Function
 # Terminal Information Printing Function

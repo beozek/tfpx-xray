@@ -127,8 +127,8 @@ def copy_scurve_root_for_analysis(scurve_file, output_dir):
         print_colored(f"Error copying SCurve file: {e}", "red")
         return False
 
-def run_xray_analysis(module_name, scurve_file, noise_file, bias, output_dir, chip_ids=None):
-    # Run the xray_analysis.py script with appropriate parameters
+def run_xray_analysis(module_name, scurve_file, noise_file, bias, output_dir, chip_type, chip_ids=None):
+    # Run the xray_analysis.py script with appropriate parameters"""
     if not os.path.exists(XRAY_ANALYSIS_SCRIPT):
         print_colored(f"X-ray analysis script not found: {XRAY_ANALYSIS_SCRIPT}", "red")
         return False
@@ -174,7 +174,8 @@ def run_xray_analysis(module_name, scurve_file, noise_file, bias, output_dir, ch
         "-noise", noise_base,
         "-outpath", "analysis_results",
         "-sensor", module_name,
-        "-bias", str(bias)
+        "-bias", str(bias),
+        "-chiptype", chip_type.lower()
     ]
     
     # Create the xray analysis output directory if it doesn't exist
@@ -250,7 +251,8 @@ def main():
         scurve_file=scurve_file,
         noise_file=noise_file,
         bias=args.bias,
-        output_dir=output_dir
+        output_dir=output_dir,
+        chip_type=args.chip_type
     )
     
     if success:

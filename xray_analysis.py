@@ -52,12 +52,16 @@ parser.add_argument('-bias','--bias', help = 'The bias of the sensor [V]', defau
 parser.add_argument('-vref','--vref', help = 'The VRef_ADC [mV]', default = 800, type = int)
 parser.add_argument('-ntrg','--ntrg', help = 'The total # of triggers in the xml', default = 1e7, type = int)
 parser.add_argument('-nbx','--nbx', help = 'The total # of bunch crossing for each trigger in the xml', default = 10, type = int)
+parser.add_argument('-chiptype','--chiptype', help = 'Type of module (dual or quad)', default = 'quad', type = str)
 args = parser.parse_args()
 
 debug = False
 
-# Define the list of chips directly in the script
-chips = [12, 13, 14, 15]
+# Set chip list based on module type
+if args.chiptype.lower() == 'dual':
+    chips = [12, 13]
+else:  # Default to quad
+    chips = [12, 13, 14, 15]
 
 # Path to the SCurve root file (contains threshold data)
 thr_data_file = f"{args.scurve}.root"

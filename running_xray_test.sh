@@ -28,12 +28,25 @@ while [[ ! "$CHIP_TYPE" =~ ^(dual|quad)$ ]]; do
     read -p "Enter the chip type (dual or quad): " CHIP_TYPE
 done
 
+# For quad modules, ask for chip version
+CHIP_VERSION=""
+if [[ "$CHIP_TYPE" == "quad" ]]; then
+    read -p "Enter the chip version (v1 or v2): " CHIP_VERSION
+    while [[ ! "$CHIP_VERSION" =~ ^(v1|v2)$ ]]; do
+        echo -e "${RED}Invalid chip version. Please enter 'v1' or 'v2'.${RESET}"
+        read -p "Enter the chip version (v1 or v2): " CHIP_VERSION
+    done
+fi
+
 # Set bias voltage to 80V (always)
 BIAS_VOLTAGE=80
 
 echo "Module Name: $MODULE_NAME"
 echo "Thermal Cycle Number: $THERMAL_CYCLE"
 echo "Chip Type: $CHIP_TYPE"
+if [[ -n "$CHIP_VERSION" ]]; then
+    echo "Chip Version: $CHIP_VERSION"
+fi
 echo "Bias Voltage: $BIAS_VOLTAGE V"
 
 # Step 1.5: Ask if the user wants to copy files from Downloads
@@ -99,6 +112,35 @@ if [ -z "$XML_FILE" ]; then
     exit 1
 fi
 echo "XML file found: $XML_FILE"
+
+# Modify GTX RX polarity in XML file based on module name
+if [[ "$CHIP_TYPE" == "quad" && "$CHIP_VERSION" == "v2" ]]; then
+    echo -e "${GREEN}Checking if GTX RX polarity needs to be modified...${RESET}"
+    
+    # Set gtx_rx_polarity based on module name
+    if [[ "$MODULE_NAME" == SH01* ]]; then
+        echo -e "${GREEN}Module $MODULE_NAME starts with SH01, setting gtx_rx_polarity fmc_l12 to 0b1001${RESET}"
+        NEW_POLARITY="0b1001"
+    elif [[ "$MODULE_NAME" == SH00* ]]; then
+        echo -e "${GREEN}Module $MODULE_NAME starts with SH00, setting gtx_rx_polarity fmc_l12 to 0b1101${RESET}"
+        NEW_POLARITY="0b1101"
+    else
+        echo -e "${YELLOW}Module $MODULE_NAME does not start with SH00 or SH01. Not modifying XML.${RESET}"
+    fi
+    
+    # Update the XML file if NEW_POLARITY is set
+    if [[ -n "$NEW_POLARITY" ]]; then
+        # Create a backup of the original file
+        cp "$XML_FILE" "${XML_FILE}.bak"
+        
+        # Use sed to replace the gtx_rx_polarity value
+        sed -i "s/<Register name=\"fmc_l12\">0b[01]\{4\}<\/Register>/<Register name=\"fmc_l12\">$NEW_POLARITY<\/Register>/g" "$XML_FILE"
+        
+        echo -e "${GREEN}Updated gtx_rx_polarity in $XML_FILE${RESET}"
+    fi
+else
+    echo -e "${YELLOW}Not a quad v2 module. No need to modify GTX RX polarity.${RESET}"
+fi
 
 # Step 4: Run Ph2 ACF commands
 echo -e "${GREEN}=== Running Ph2 ACF Commands ===${RESET}"

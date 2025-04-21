@@ -39,7 +39,10 @@ Performs X-ray analysis after the test:
 - Finds and copies all necessary input files
 - Uses xray_analysis.py to analyze the results
 - Generates plots showing hits, noise, threshold, and open bumps
-- Creates a list of open bump coordinates
+- Creates a list of open bump coordinates (open_bumps.txt)
+
+# How to run manually:
+# python xray_analysis.py -scurve Run0000041_SCurve -noise Run000000_NoiseScan -sensor SH0055
 
 ### xray_analysis.py
 

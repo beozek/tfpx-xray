@@ -27,6 +27,12 @@ except ImportError:
 import argparse
 import matplotlib.patches as patches
 
+
+# How to run manually:
+# python xray_analysis.py -scurve Run0000041_SCurve -noise Run000000_NoiseScan -sensor SH0055
+
+
+
 # Arguments --------------------
 parser = argparse.ArgumentParser(description='Do the XRay analysis')
 
